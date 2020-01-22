@@ -1,6 +1,6 @@
 """(Very) Simple Implementation of Artnet.
 
-Python Version: 3.6
+Python Version: 3.7
 Source: http://artisticlicence.com/WebSiteMaster/User%20Guides/art-net.pdf
 		http://art-net.org.uk/wordpress/structure/streaming-packets/artdmx-packet-definition/
 
@@ -61,7 +61,7 @@ class StupidArtnet():
 	def __str__(self):
 		"""Printable object state."""
 		s = "===================================\n"
-		s += "Stupid Artnet initialized\n"
+		s += "Artnet DMX Controller initialized\n"
 		s += "Target IP: %s:%i \n" % (self.TARGET_IP, self.UDP_PORT)
 		s += "Universe: %i \n" % self.UNIVERSE
 		if not (self.bIsSimplified):
@@ -158,8 +158,22 @@ class StupidArtnet():
 			self.__clock.cancel()
 
 	def __do_fade(self, address):
-		print("Doing fade: ", str(address))
-		pass
+		# convert from incrementor to channel address
+		self.mFadeValues[address].remainingFrames -= 1
+		if self.mFadeValues[address].remainingFrames < 1:
+			self.mFadeValues[address].isFading = False
+			value = self.mFadeValues[address].targetValue
+			self.BUFFER[address] = self.put_in_range(value, 0, 255, False)
+			print("Finishing fade", self.mFadeValues[address].targetValue)
+			return
+			
+		self.mFadeValues[address].currentValue += self.mFadeValues[address].fadeIncrement
+		newValue = round(self.mFadeValues[address].currentValue)
+		self.BUFFER[address] = self.put_in_range(newValue, 0, 255, False)
+		print("Continuing fade: current ",
+			self.mFadeValues[address].currentValue,
+			", actual value passed: ",
+			newValue)
 
 	##
 	# SETTERS - HEADER
@@ -235,6 +249,8 @@ class StupidArtnet():
 		if address < 1 or address > 512:
 			print("ERROR: Address out of range")
 			return
+		if self.mFadeValues[address-1].isFading:
+			print("WARNING: Stop fade before setting value")
 		self.BUFFER[address - 1] = self.put_in_range(value, 0, 255, False)
 
 	def set_single_rem(self, address, value):
@@ -281,15 +297,15 @@ class StupidArtnet():
 		# calculate how many frames needed for fade
 		frames = float(duration * self.fps)
 		numFrames = int(round(frames))
-		diff = self.BUFFER[address-1] - targetVal
+		diff = targetVal - self.BUFFER[address-1]
 		increment = diff / frames
 
 		# save values for that channel
-		self.mFadeValues[address].isFading = True
-		self.mFadeValues[address].currentValue = self.BUFFER[address-1]
-		self.mFadeValues[address].targetValue = targetVal
-		self.mFadeValues[address].remainingFrames = numFrames
-		self.mFadeValues[address].fadeIncrement = increment
+		self.mFadeValues[address-1].isFading = True
+		self.mFadeValues[address-1].currentValue = self.BUFFER[address-1]
+		self.mFadeValues[address-1].targetValue = targetVal
+		self.mFadeValues[address-1].remainingFrames = numFrames
+		self.mFadeValues[address-1].fadeIncrement = increment
 
 	##
 	# AUX
