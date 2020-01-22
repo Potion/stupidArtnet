@@ -250,7 +250,8 @@ class StupidArtnet():
 			print("ERROR: Address out of range")
 			return
 		if self.mFadeValues[address-1].isFading:
-			print("WARNING: Stop fade before setting value")
+			print("WARNING: Stopping fade before setting value")
+			self.mFadeValues[address-1].isFading = False
 		self.BUFFER[address - 1] = self.put_in_range(value, 0, 255, False)
 
 	def set_single_rem(self, address, value):
