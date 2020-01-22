@@ -11,7 +11,15 @@ NOTES
 
 import socket
 from threading import Timer
+from dataclasses import dataclass
 
+@dataclass
+class FadeValues:
+	isFading: bool = False
+	currentValue: int = 0
+	targetValue: int = 0
+	remainingFrames: int = 0
+	fadeIncrement: float = 0.0
 
 class StupidArtnet():
 	"""(Very) simple implementation of Artnet."""
@@ -39,7 +47,12 @@ class StupidArtnet():
 		# Timer
 		self.fps = fps
 
+		# Create header in constructor
 		self.make_header()
+
+		# Fading
+		self.mFadeValues = {}
+		self.populate_fade_variables()
 
 	def __del__(self):
 		self.stop()
@@ -102,6 +115,12 @@ class StupidArtnet():
 		self.HEADER.append(v[0])
 		self.HEADER.append(v[1])
 
+	def populate_fade_variables(self):
+		"""Set initial values for fading"""
+		for i in range(self.PACKET_SIZE):
+			fadeValues = FadeValues()
+			self.mFadeValues[i] = fadeValues
+
 	def show(self):
 		"""Finally send data."""
 		packet = bytearray()
@@ -123,7 +142,11 @@ class StupidArtnet():
 	##
 
 	def start(self):
-		"""Starts thread clock."""
+		"""Calculates new values in fade and starts thread clock."""
+		for i in range(self.PACKET_SIZE):
+			if self.mFadeValues[i].isFading:
+				self.__do_fade(i)
+
 		self.show()
 		self.__clock = Timer((1000.0 / self.fps) / 1000.0, self.start)
 		self.__clock.daemon = True
@@ -133,6 +156,10 @@ class StupidArtnet():
 		"""Stops thread clock."""
 		if hasattr(self, "__clock"):
 			self.__clock.cancel()
+
+	def __do_fade(self, address):
+		print("Doing fade: ", str(address))
+		pass
 
 	##
 	# SETTERS - HEADER
@@ -233,6 +260,36 @@ class StupidArtnet():
 		self.BUFFER[address - 1] = self.put_in_range(r, 0, 255, False)
 		self.BUFFER[address] = self.put_in_range(g, 0, 255, False)
 		self.BUFFER[address + 1] = self.put_in_range(b, 0, 255, False)
+
+	def set_fade(self, address, targetVal, duration):
+		"""
+		Set target fade for address with a duration
+
+		Parameters:
+			address (int): Which channel to fade
+			targetVal (int): Final value for fade
+			duration (float): Duration of fade in seconds
+		"""
+
+		if address > self.PACKET_SIZE:
+			print("ERROR: Address given greater than defined packet size")
+			return
+		if address < 1 or address > 512:
+			print("ERROR: Address out of range")
+			return
+
+		# calculate how many frames needed for fade
+		frames = float(duration * self.fps)
+		numFrames = int(round(frames))
+		diff = self.BUFFER[address-1] - targetVal
+		increment = diff / frames
+
+		# save values for that channel
+		self.mFadeValues[address].isFading = True
+		self.mFadeValues[address].currentValue = self.BUFFER[address-1]
+		self.mFadeValues[address].targetValue = targetVal
+		self.mFadeValues[address].remainingFrames = numFrames
+		self.mFadeValues[address].fadeIncrement = increment
 
 	##
 	# AUX
