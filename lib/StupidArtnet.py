@@ -164,16 +164,11 @@ class StupidArtnet():
 			self.mFadeValues[address].isFading = False
 			value = self.mFadeValues[address].targetValue
 			self.BUFFER[address] = self.put_in_range(value, 0, 255, False)
-			print("Finishing fade", self.mFadeValues[address].targetValue)
 			return
 			
 		self.mFadeValues[address].currentValue += self.mFadeValues[address].fadeIncrement
 		newValue = round(self.mFadeValues[address].currentValue)
 		self.BUFFER[address] = self.put_in_range(newValue, 0, 255, False)
-		print("Continuing fade: current ",
-			self.mFadeValues[address].currentValue,
-			", actual value passed: ",
-			newValue)
 
 	##
 	# SETTERS - HEADER
@@ -295,16 +290,21 @@ class StupidArtnet():
 			print("ERROR: Address out of range")
 			return
 
+		if duration < 0:
+			print("ERROR: Duration must be a positive number")
+			return
+
 		# calculate how many frames needed for fade
 		frames = float(duration * self.fps)
 		numFrames = int(round(frames))
-		diff = targetVal - self.BUFFER[address-1]
+		target = self.put_in_range(targetVal, 0, 255, False)
+		diff = target - self.BUFFER[address-1]
 		increment = diff / frames
 
 		# save values for that channel
 		self.mFadeValues[address-1].isFading = True
 		self.mFadeValues[address-1].currentValue = self.BUFFER[address-1]
-		self.mFadeValues[address-1].targetValue = targetVal
+		self.mFadeValues[address-1].targetValue = target
 		self.mFadeValues[address-1].remainingFrames = numFrames
 		self.mFadeValues[address-1].fadeIncrement = increment
 
